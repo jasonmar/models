@@ -19,6 +19,7 @@
 import os
 import os.path
 import time
+
 import tempfile
 import tensorflow as tf
 
@@ -73,16 +74,16 @@ def RewriteContext(task_context):
     return fout.name
 
 
-def Eval(sess):
-  """Builds and evaluates a network."""
-  task_context = FLAGS.task_context
-  if FLAGS.resource_dir:
-    task_context = RewriteContext(task_context)
-  feature_sizes, domain_sizes, embedding_dims, num_actions = sess.run(
-      gen_parser_ops.feature_size(task_context=task_context,
-                                  arg_prefix=FLAGS.arg_prefix))
+def EvalForever(sess, num_actions, feature_sizes, domain_sizes, embedding_dims):
+  """Builds and evaluates a network.
 
-  t = time.time()
+  Args:
+    sess: tensorflow session to use
+    num_actions: number of possible golden actions
+    feature_sizes: size of each feature vector
+    domain_sizes: number of possible feature ids in each feature vector
+    embedding_dims: embedding dimension for each feature group
+  """
   hidden_layer_sizes = map(int, FLAGS.hidden_layer_sizes.split(','))
   logging.info('Building training network with parameters: feature_sizes: %s '
                'domain_sizes: %s', feature_sizes, domain_sizes)
@@ -105,6 +106,21 @@ def Eval(sess):
         arg_prefix=FLAGS.arg_prefix,
         beam_size=FLAGS.beam_size,
         max_steps=FLAGS.max_steps)
+  task_context = FLAGS.task_context
+  while True:
+    if not Eval(sess, parser, task_context):
+      break
+
+def Eval(sess, parser, task_context):
+  # Builds and evaluates a network.
+  if FLAGS.resource_dir:
+    task_context = RewriteContext(task_context)
+  feature_sizes, domain_sizes, embedding_dims, num_actions = sess.run(
+    gen_parser_ops.feature_size(
+      task_context=task_context,
+      arg_prefix=FLAGS.arg_prefix
+    )
+  )
   parser.AddEvaluation(task_context,
                        FLAGS.batch_size,
                        corpus_name=FLAGS.input,
@@ -150,11 +166,17 @@ def Eval(sess):
     logging.info('Seconds elapsed in evaluation: %.2f, '
                  'eval metric: %.2f%%', time.time() - t, eval_metric)
 
+  return num_documents
 
 def main(unused_argv):
   logging.set_verbosity(logging.INFO)
   with tf.Session() as sess:
-    Eval(sess)
+    feature_sizes, domain_sizes, embedding_dims, num_actions = sess.run(
+        gen_parser_ops.feature_size(task_context=FLAGS.task_context,
+                                    arg_prefix=FLAGS.arg_prefix))
+
+  with tf.Session() as sess:
+    EvalForever(sess, num_actions, feature_sizes, domain_sizes, embedding_dims)
 
 
 if __name__ == '__main__':
