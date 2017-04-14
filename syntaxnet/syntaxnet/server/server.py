@@ -118,7 +118,12 @@ pool = Pool(1, maxtasksperchild=50)
 
 @app.route('/')
 def index():
-  q = request.args.get('q')
+  req_dict = request.get_json()
+  if req_dict is not None:
+    q = req_dict.get('q')
+  else:
+    q = request.args.get('q')
+
   if q is None:
     r = Response(
       response='q is required',
