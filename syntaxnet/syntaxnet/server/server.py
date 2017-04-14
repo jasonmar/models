@@ -116,7 +116,7 @@ port = 80 if os.getuid() == 0 else 8000
 
 pool = Pool(1, maxtasksperchild=50)
 
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
 def index():
   req_dict = request.get_json()
   if req_dict is not None:
